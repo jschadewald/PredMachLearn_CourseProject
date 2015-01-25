@@ -1,0 +1,102 @@
+---
+title: "Better Exercise with an Automated Personal Trainer"
+author: "Jason Schadewald"
+date: "Friday, January 23, 2015"
+output: html_document
+---
+
+##Introduction and Summary
+Hi Reviewer!
+
+
+This is my Course Project submission for the Practical Machine Learning course offered courtesy of Johns Hopkins Bloomberg School of Public Health via [coursera.org](). The assignment builds on the work done by the authors noted at the end, in the Citations section. Their site is here: [http://groupware.les.inf.puc-rio.br/har]().
+
+
+Obviously, it would be great if every person could have their very own personal trainer to help them improve the effectiveness of their exercise routines and reduce their risk of injury. So, the goal of this assignment -- like the original research already mentioned -- is to use a machine learning algorithm to infer which of 5 types of exercise is being performed based on data collected from sensors on the body and on a set of free weights. More precisely, the "types" of exercise are actually "levels of quality" of a single exercise, enabling real-time detection and feedback to the user.
+
+
+I've made all of the R code visible inline to make it easier for you to verify that the learning algorithm is applied and used to make predictions. The code assumes that the [pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) file is in your working directory.
+
+
+As you'll see, I went with a random forest model and a 60/40 training/testing split resulting in an estimated out-of-sample error of 0.4%.
+
+
+Thanks for your time and consideration!
+
+--Jason
+
+
+##Loading and Partitioning
+
+First, the data is loaded from file and immediately split into a training set and testing set with 60% of the data going to training and the remainder going to testing.
+
+```{r loadData, message=FALSE}
+library(caret)
+library(randomForest)
+
+train_csv<-read.csv("pml-training.csv")
+set.seed(7254)
+inTrain<-createDataPartition(train_csv$classe, p=.6, list=FALSE)
+training<-train_csv[inTrain,]
+testing<-train_csv[-inTrain,]
+
+#How big is the training set?
+dim(training)
+
+#How many missing values are there?
+sum(is.na(training))
+```
+
+
+At this point, I've already decided to use a random forest model because it is known to have a high level of accuracy and is particularly well-suited to categorization problems involving more than two categories. One of the drawbacks is that random forests do not deal well with data that contains missing (NA) values. Additionally, random forest model fits are significantly slowed by large numbers of variables.  The following code narrows the number of variables to exclude bad, biased, or useless predictors.
+
+```{r preprocessing}
+#Function that takes a data frame and returns a vector
+#of indices of columns that contain NA values.
+na.cols <- function(df) {
+    indicators<-logical(length(df))
+    for (i in 1:length(df)) {
+        indicators[i]<-sum(is.na(df[,i]))>0
+    }
+    which(indicators)
+}
+
+#Function that takes either the training or testing data
+#frame loaded above and returns a subset of the columns
+#for purposes of model fitting and prediction.
+preProc <- function(df) {
+    df<-df[,-na.cols(df)]
+    df<-df[,-c(1,5,6,7)]
+    df<-df[,-nearZeroVar(df)]
+}
+
+#Preprocess to improve speed and accuracy of random forest fit.
+training<-preProc(training)
+```
+
+
+##Training and Testing
+
+Here, the random forest method is used to fit the training data, and then the out of sample error and other "goodness of fit" metrics are estimated using the testing set.
+
+```{r fit, cache=TRUE}
+rfFit<-train(classe ~ ., data=training, method="rf")
+```
+
+```{r goodnessOfFit}
+testing<-preProc(testing)
+rfTestPred<-predict(rfFit, testing)
+confusionMatrix(rfTestPred, testing$classe)
+```
+
+
+In particular, the confidence interval for accuracy above tells use that there is also a 95% confidence interval of 0.3% - 0.61% for the **out of sample error rate**.
+
+
+##Conclusion
+It appears that exercise quality can, in fact, be predicted with astonishing accuracy and confidence. We are well on our way to having electronic personal trainers.
+
+
+##Citations
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
